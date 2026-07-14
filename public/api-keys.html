@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Keys — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <div class="main-area">
+      <div class="page-header">
+        <div>
+          <h1>API Keys</h1>
+          <p class="subtitle">Use these to send messages from your own code, n8n, or other tools. See Developers for full examples.</p>
+        </div>
+        <button class="btn btn-accent" id="new-key-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New API key
+        </button>
+      </div>
+      <div class="page-body">
+        <div id="keys-area"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="create-modal" style="display:none;">
+    <div class="modal-box" id="create-modal-box">
+      <div class="modal-header">
+        <h2 style="font-size:18px;" id="modal-title">New API key</h2>
+        <button class="modal-close" id="close-create-modal">✕</button>
+      </div>
+      <form id="create-form">
+        <div class="field">
+          <label class="label">Label</label>
+          <input class="input" id="key-label" required autofocus placeholder="n8n workflow, Production server, etc." />
+        </div>
+        <p class="error-text" id="create-error" style="display:none;"></p>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button type="button" class="btn btn-ghost" id="cancel-create">Cancel</button>
+          <button type="submit" class="btn btn-accent" id="submit-create">Create key</button>
+        </div>
+      </form>
+      <div id="created-key-view" style="display:none;">
+        <div style="display:flex;gap:8px;background:var(--amber-50);border-radius:8px;padding:12px;font-size:12px;color:var(--ink-soft);margin-bottom:14px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" style="flex-shrink:0;"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          This key is shown once. Copy it now — you won't be able to see it again.
+        </div>
+        <div class="cred-field" style="margin-bottom:16px;">
+          <code class="mono" id="created-key-text" style="font-size:13px;"></code>
+          <button type="button" id="copy-created-key">⧉</button>
+        </div>
+        <button class="btn btn-primary" style="width:100%;" id="done-btn">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/layout.js"></script>
+  <script src="/static/js/apikeys.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Developers — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <div class="main-area">
+      <div class="page-header">
+        <div>
+          <h1>Developers</h1>
+          <p class="subtitle">Send WhatsApp messages from your own code, workflows, or scripts.</p>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="grid grid-3" style="align-items:start;">
+          <div style="grid-column:span 1;display:flex;flex-direction:column;gap:24px;">
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Endpoint</h3>
+              <code class="mono" id="endpoint-display" style="display:block;margin-top:8px;background:var(--canvas-panel);border-radius:8px;padding:8px 12px;font-size:12px;word-break:break-all;"></code>
+              <p class="hint-text" style="margin-top:12px;">Send your key in the <code class="mono">X-API-Key</code> header, and the message details as JSON in the body. Create a key in the API Keys section first.</p>
+            </div>
+
+            <div class="card card-pad">
+              <h3 class="label" style="margin-bottom:8px;">Instance</h3>
+              <select class="input" id="instance-select"></select>
+              <p class="hint-text" style="margin-top:6px;">Identifies by <code class="mono">instanceName</code> so the message always goes out from the right number, even across renames of the ID.</p>
+
+              <h3 class="label" style="margin:16px 0 8px;">Message type</h3>
+              <div class="chip-row" id="type-chips"></div>
+
+              <h3 class="label" style="margin:16px 0 8px;">Language</h3>
+              <div class="chip-row" id="lang-chips"></div>
+            </div>
+
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Field reference</h3>
+              <dl style="margin-top:12px;font-size:12px;" id="field-reference"></dl>
+            </div>
+          </div>
+
+          <div style="grid-column:span 2;">
+            <div id="code-area"></div>
+            <div class="card card-pad" style="margin-top:24px;">
+              <h3 style="font-size:16px;">Response</h3>
+              <p class="hint-text" style="margin:8px 0;">On success:</p>
+              <div class="code-block"><pre>{
+  "success": true,
+  "instanceId": "6650...",
+  "instanceName": "Support line",
+  "messageId": "3EB0C767..."
+}</pre></div>
+              <p class="hint-text" style="margin:16px 0 8px;">On failure, you'll get a 4xx/5xx with a JSON error, e.g.:</p>
+              <div class="code-block"><pre>{ "error": "Instance \"Support line\" is not connected (status: disconnected)" }</pre></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/layout.js"></script>
+  <script src="/static/js/developers.js"></script>
+</body>
+</html>

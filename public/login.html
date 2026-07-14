@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Log in — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="auth-grid">
+    <div class="auth-form-side">
+      <div class="auth-form-inner">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:32px;">
+          <div class="logo-box" style="width:32px;height:32px;border-radius:8px;background:var(--ink);display:flex;align-items:center;justify-content:center;color:var(--signal-400);">W</div>
+          <span style="font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:18px;">Wirebase</span>
+        </div>
+
+        <h1 style="font-size:24px;">Log in</h1>
+        <p class="hint-text" style="margin-top:6px;">Access your Wirebase dashboard.</p>
+
+        <div class="tabs">
+          <button class="tab-btn active" id="tab-subadmin" type="button">Team member</button>
+          <button class="tab-btn" id="tab-admin" type="button">Admin</button>
+        </div>
+
+        <form id="login-form">
+          <div id="admin-fields" style="display:none;">
+            <div class="field">
+              <label class="label">Admin API key</label>
+              <input class="input mono" type="password" id="api-key" placeholder="Paste the ADMIN_API_KEY from your .env" />
+            </div>
+          </div>
+
+          <div id="subadmin-fields">
+            <div class="field">
+              <label class="label">Email</label>
+              <input class="input" type="email" id="email" placeholder="you@company.com" />
+            </div>
+            <div class="field">
+              <label class="label">Password</label>
+              <input class="input" type="password" id="password" placeholder="Given to you by your admin" />
+            </div>
+          </div>
+
+          <p class="error-text" id="error-msg" style="display:none;margin-bottom:12px;"></p>
+          <button type="submit" class="btn btn-accent" style="width:100%;" id="submit-btn">Log in</button>
+        </form>
+
+        <p class="hint-text" style="margin-top:24px;">
+          Team member accounts are created by your Admin from the Sub-admins section — there's no self-signup.
+        </p>
+      </div>
+    </div>
+
+    <div class="auth-visual-side">
+      <div style="position:absolute;inset:0;opacity:.07;background-image:radial-gradient(circle,#fff 1px,transparent 1px);background-size:24px 24px;"></div>
+      <div class="auth-visual-content">
+        <div class="qr-wrap" style="width:96px;height:96px;">
+          <div style="position:relative;width:64px;height:64px;border-radius:999px;background:var(--signal-500);display:flex;align-items:center;justify-content:center;margin:16px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4.9 4.9a10 10 0 0 1 14.2 14.2M9.5 9.5a4 4 0 0 1 5 5" /><circle cx="12" cy="12" r="1.5" fill="#fff" /></svg>
+          </div>
+        </div>
+        <p style="color:#fff;font-family:'Space Grotesk',sans-serif;font-size:20px;max-width:280px;">Every number, every instance, one signal.</p>
+        <p style="color:rgba(255,255,255,.5);font-size:14px;max-width:280px;">Manage WhatsApp instances, sub-admins, and public API access from one dashboard.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script>
+    let tab = 'subadmin';
+    const tabSub = document.getElementById('tab-subadmin');
+    const tabAdmin = document.getElementById('tab-admin');
+    const adminFields = document.getElementById('admin-fields');
+    const subadminFields = document.getElementById('subadmin-fields');
+    const errorMsg = document.getElementById('error-msg');
+    const submitBtn = document.getElementById('submit-btn');
+
+    function setTab(next) {
+      tab = next;
+      tabSub.classList.toggle('active', tab === 'subadmin');
+      tabAdmin.classList.toggle('active', tab === 'admin');
+      adminFields.style.display = tab === 'admin' ? 'block' : 'none';
+      subadminFields.style.display = tab === 'subadmin' ? 'block' : 'none';
+      errorMsg.style.display = 'none';
+    }
+    tabSub.addEventListener('click', () => setTab('subadmin'));
+    tabAdmin.addEventListener('click', () => setTab('admin'));
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Logging in…';
+      try {
+        if (tab === 'admin') {
+          await api.post('/auth/admin-login', { apiKey: document.getElementById('api-key').value });
+        } else {
+          await api.post('/auth/login', {
+            email: document.getElementById('email').value,
+            password: document.getElementById('password').value,
+          });
+        }
+        window.location.href = '/';
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Could not log in';
+        errorMsg.style.display = 'block';
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Log in';
+      }
+    });
+  </script>
+</body>
+</html>

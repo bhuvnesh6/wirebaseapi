@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instances — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <div class="main-area">
+      <div class="page-header">
+        <div>
+          <h1>Instances</h1>
+          <p class="subtitle">Every WhatsApp number you've connected, in one place.</p>
+        </div>
+        <button class="btn btn-accent" id="new-instance-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New instance
+        </button>
+      </div>
+
+      <div class="page-body">
+        <div class="grid grid-3" id="stat-cards"></div>
+        <div id="instances-area" style="margin-top:32px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="create-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 style="font-size:18px;">New instance</h2>
+        <button class="modal-close" id="close-create-modal">✕</button>
+      </div>
+      <form id="create-form">
+        <div class="field">
+          <label class="label">Instance name</label>
+          <input class="input" id="instance-name" required autofocus placeholder="Support line, Sales bot, etc." />
+        </div>
+        <label class="checkbox-row" style="margin-bottom:16px;">
+          <input type="checkbox" id="instance-proxy" />
+          <span style="font-size:14px;color:var(--ink-soft);">
+            Route this instance through a free proxy
+            <span class="hint-text" style="display:block;">Best-effort — free proxies can be slow or drop.</span>
+          </span>
+        </label>
+        <p class="error-text" id="create-error" style="display:none;"></p>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button type="button" class="btn btn-ghost" id="cancel-create">Cancel</button>
+          <button type="submit" class="btn btn-accent" id="submit-create">Create instance</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/layout.js"></script>
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

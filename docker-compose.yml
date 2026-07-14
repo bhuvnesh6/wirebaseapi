@@ -1,0 +1,29 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    # Not published to the host by default - only the app container talks to it.
+    # Uncomment below if you need to inspect it directly from the VPS:
+    # ports:
+    #   - "127.0.0.1:27017:27017"
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+    environment:
+      # Overrides whatever MONGO_URI is in .env, so the app always reaches the mongo service
+      - MONGO_URI=mongodb://mongo:27017/wirebase
+    ports:
+      - "4000:4000"
+    volumes:
+      - sessions-data:/app/sessions
+
+volumes:
+  mongo-data:
+  sessions-data:

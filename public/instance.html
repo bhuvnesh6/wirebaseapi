@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instance — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <div class="main-area">
+      <div class="page-header" style="flex-direction:column;align-items:flex-start;">
+        <a href="/" class="hint-text" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          All instances
+        </a>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;width:100%;align-items:center;">
+          <div>
+            <h1 id="instance-name-title">Loading…</h1>
+            <div class="status-row" style="margin-top:6px;" id="status-row"></div>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <button class="btn btn-accent" id="connect-btn" style="display:none;">Connect</button>
+            <button class="btn btn-ghost" id="disconnect-btn" style="display:none;">Disconnect</button>
+            <button class="btn btn-ghost danger" id="delete-btn">Delete</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="page-body">
+        <div class="grid grid-3" style="align-items:start;">
+          <div style="grid-column:span 1;display:flex;flex-direction:column;gap:24px;">
+
+            <div class="card card-pad" style="display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;">
+              <h3 style="font-size:16px;">Link this number</h3>
+              <div id="qr-area"></div>
+              <p class="hint-text">Open WhatsApp → Settings → Linked Devices → Link a Device, then scan.</p>
+            </div>
+
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Proxy</h3>
+              <p class="hint-text" style="margin-top:4px;">Route this instance's traffic through a free rotating proxy. Best-effort only.</p>
+              <label class="checkbox-row" style="justify-content:space-between;margin-top:16px;">
+                <span style="font-size:14px;color:var(--ink-soft);">Use free proxy</span>
+                <input type="checkbox" id="proxy-toggle" />
+              </label>
+              <p class="mono hint-text" id="proxy-current" style="margin-top:8px;"></p>
+            </div>
+
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Send a test message</h3>
+              <form id="test-send-form" style="margin-top:16px;">
+                <div class="field">
+                  <input class="input" id="test-to" placeholder="Number, e.g. 919876543210" required />
+                </div>
+                <div class="field">
+                  <textarea class="input" id="test-text" rows="3" placeholder="Message text" required></textarea>
+                </div>
+                <button class="btn btn-primary" style="width:100%;" id="test-send-btn">Send</button>
+                <p class="hint-text" id="test-result" style="text-align:center;margin-top:8px;"></p>
+              </form>
+            </div>
+          </div>
+
+          <div style="grid-column:span 2;display:flex;flex-direction:column;gap:24px;">
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Webhook</h3>
+              <p class="hint-text" style="margin-top:4px;">Every incoming message is POSTed here as JSON with the sender's number and message text.</p>
+              <form id="webhook-form" style="margin-top:16px;">
+                <div class="field">
+                  <label class="label">Webhook URL</label>
+                  <input class="input" id="webhook-url" placeholder="https://your-server.com/webhook/whatsapp" />
+                </div>
+                <label class="checkbox-row" style="margin-bottom:16px;">
+                  <input type="checkbox" id="include-groups" />
+                  <span style="font-size:14px;color:var(--ink-soft);">Also forward group messages</span>
+                </label>
+                <div class="field">
+                  <label class="label">Signing secret</label>
+                  <div style="display:flex;gap:8px;">
+                    <code class="mono" id="webhook-secret" style="flex:1;border:1px solid var(--canvas-border);background:var(--canvas-panel);border-radius:8px;padding:10px 14px;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></code>
+                    <button type="button" class="btn btn-ghost btn-sm" id="copy-secret-btn">Copy</button>
+                    <button type="button" class="btn btn-ghost btn-sm" id="regen-secret-btn">Regenerate</button>
+                  </div>
+                  <p class="hint-text" style="margin-top:6px;">Sent as the X-Webhook-Secret header — verify it on your endpoint.</p>
+                </div>
+                <div style="display:flex;align-items:center;gap:12px;">
+                  <button type="submit" class="btn btn-primary" id="save-webhook-btn">Save webhook</button>
+                  <span class="hint-text" id="webhook-saved-msg" style="display:none;color:var(--signal-600);">Saved</span>
+                </div>
+              </form>
+            </div>
+
+            <div class="card card-pad">
+              <h3 style="font-size:16px;">Incoming messages</h3>
+              <p class="hint-text" style="margin-top:4px;">Live feed of messages received on this instance.</p>
+              <div class="table-wrap" style="border:1px solid var(--canvas-border);margin-top:16px;">
+                <table>
+                  <thead><tr><th>From</th><th>Message</th><th>Received</th></tr></thead>
+                  <tbody id="messages-tbody">
+                    <tr><td colspan="3" style="text-align:center;color:var(--ink-muted);padding:32px;">No messages yet — they'll appear here in real time.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/layout.js"></script>
+  <script src="/static/js/instance.js"></script>
+</body>
+</html>

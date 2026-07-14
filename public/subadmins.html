@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sub-admins — Wirebase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div class="app-shell" id="app-shell">
+    <div class="main-area">
+      <div class="page-header">
+        <div>
+          <h1>Sub-admins</h1>
+          <p class="subtitle">Team members who can manage their own instances and webhooks.</p>
+        </div>
+        <button class="btn btn-accent" id="new-subadmin-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New sub-admin
+        </button>
+      </div>
+      <div class="page-body">
+        <div id="subadmins-area"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="create-modal" style="display:none;">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 style="font-size:18px;">New sub-admin</h2>
+        <button class="modal-close" id="close-create-modal">✕</button>
+      </div>
+      <form id="create-form">
+        <div class="field">
+          <label class="label">Full name</label>
+          <input class="input" id="sub-name" required autofocus placeholder="Jordan Lee" />
+        </div>
+        <div class="field">
+          <label class="label">Email</label>
+          <input class="input" type="email" id="sub-email" required placeholder="jordan@company.com" />
+        </div>
+        <p class="hint-text" style="margin-bottom:16px;">A secure password is generated automatically. You'll see it once, right after creating this account.</p>
+        <p class="error-text" id="create-error" style="display:none;"></p>
+        <div style="display:flex;justify-content:flex-end;gap:12px;">
+          <button type="button" class="btn btn-ghost" id="cancel-create">Cancel</button>
+          <button type="submit" class="btn btn-accent" id="submit-create">Create sub-admin</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/layout.js"></script>
+  <script src="/static/js/subadmins.js"></script>
+</body>
+</html>
