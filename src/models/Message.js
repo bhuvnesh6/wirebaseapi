@@ -6,6 +6,7 @@ const messageSchema = new mongoose.Schema(
     direction: { type: String, enum: ['in', 'out'], default: 'in' },
 
     number: { type: String, required: true, index: true },
+    isLid: { type: Boolean, default: false }, // true if `number` is a WhatsApp LID, not a real phone number
     message: { type: String, default: '' },
     isGroup: { type: Boolean, default: false },
     groupId: { type: String, default: null },

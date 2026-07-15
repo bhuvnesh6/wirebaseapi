@@ -39,6 +39,35 @@ function extractMessageText(message) {
   return null;
 }
 
+// WhatsApp increasingly sends messages with a "LID" (Linked ID) instead of the real phone
+// number, e.g. remoteJid "259910650560760@lid" instead of "919876543210@s.whatsapp.net" -
+// this is a privacy feature on WhatsApp's side, not a bug. Baileys exposes the real
+// phone-number JID (when it knows it) via remoteJidAlt (DMs) / participantAlt (groups) on the
+// message key. If that's missing, we fall back to Baileys' own LID<->PN mapping store. Some
+// LIDs genuinely have no known phone-number mapping yet (WhatsApp only reveals it on demand,
+// e.g. via a business's { requestPhoneNumber: true } message) - in that case we return the LID
+// itself with isLid: true so callers/webhooks can tell the difference.
+async function resolveSender(msg, isGroup, sock) {
+  let jid = isGroup ? msg.key.participant || msg.key.remoteJid : msg.key.remoteJid;
+  const altJid = isGroup ? msg.key.participantAlt : msg.key.remoteJidAlt;
+
+  if (jid?.endsWith('@lid') && altJid) {
+    jid = altJid;
+  }
+
+  if (jid?.endsWith('@lid')) {
+    try {
+      const pn = await sock.signalRepository?.lidMapping?.getPNForLID(jid);
+      if (pn) jid = pn;
+    } catch (_) {
+      // no known mapping yet - fall through with the LID as-is
+    }
+  }
+
+  const isLid = !!jid?.endsWith('@lid');
+  return { number: (jid || '').split('@')[0], isLid };
+}
+
 async function postToWebhook(instanceDoc, payload) {
   if (!instanceDoc.webhookUrl) return false;
   try {
@@ -159,7 +188,12 @@ export async function startInstance(instanceId, io) {
         if (isGroup && !instanceNow.includeGroupMessages) continue;
 
         const senderJid = isGroup ? msg.key.participant || remoteJid : remoteJid;
-        const number = senderJid.split('@')[0];
+        const { number, isLid } = await resolveSender(msg, isGroup, sock);
+        if (isLid) {
+          console.warn(
+            chalk.yellow(`[baileysManager] instance ${instanceId}: no phone number mapping for LID ${senderJid} yet - using LID as-is`)
+          );
+        }
         const text = extractMessageText(msg.message);
         if (text === null) continue;
 
@@ -167,6 +201,7 @@ export async function startInstance(instanceId, io) {
           instance: instanceId,
           direction: 'in',
           number,
+          isLid,
           message: text,
           isGroup,
           groupId: isGroup ? remoteJid.split('@')[0] : null,
@@ -178,6 +213,7 @@ export async function startInstance(instanceId, io) {
         io.to(room(instanceId)).emit('message', {
           instanceId,
           number,
+          isLid,
           message: text,
           isGroup,
           pushName: msg.pushName || null,
@@ -188,6 +224,7 @@ export async function startInstance(instanceId, io) {
           instanceId,
           instanceName: instanceNow.name,
           number,
+          isLid,
           message: text,
           isGroup,
           groupId: isGroup ? remoteJid.split('@')[0] : null,
