@@ -20,6 +20,7 @@ const instanceSchema = new mongoose.Schema(
     webhookUrl: { type: String, default: null },
     webhookSecret: { type: String, default: null },
     includeGroupMessages: { type: Boolean, default: false },
+    includeOwnMessages: { type: Boolean, default: true },
 
     useProxy: { type: Boolean, default: false },
     proxyUrl: { type: String, default: null },

@@ -19,7 +19,9 @@ if (!fs.existsSync(SESSIONS_DIR)) fs.mkdirSync(SESSIONS_DIR, { recursive: true }
 
 const logger = P({ level: 'silent' });
 
-// live in-memory registry: instanceId -> { sock, io }
+const KEEP_ALIVE_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+// live in-memory registry: instanceId -> { sock, io, keepAliveInterval }
 const active = new Map();
 
 function room(instanceId) {
@@ -87,6 +89,29 @@ async function updateStatus(instanceId, io, status, extra = {}) {
   io.to(room(instanceId)).emit('status', { instanceId, status, ...extra });
 }
 
+// Periodically pings WhatsApp's servers over the existing socket so idle connections
+// aren't silently dropped by network middleboxes/load balancers during long quiet periods.
+// This does NOT replace Baileys' own reconnect logic - it just keeps a healthy socket busy.
+function startKeepAlive(instanceId, sock) {
+  const keepAliveInterval = setInterval(async () => {
+    if (!active.has(instanceId)) {
+      clearInterval(keepAliveInterval);
+      return;
+    }
+    try {
+      await sock.query({
+        tag: 'iq',
+        attrs: { type: 'get', xmlns: 'urn:xmpp:ping', id: `keep-alive-${Date.now()}` },
+      });
+      console.log(chalk.blue(`[keep-alive] ping sent for instance ${instanceId}`));
+    } catch (err) {
+      console.warn(chalk.yellow(`[keep-alive] ping failed for ${instanceId}: ${err.message}`));
+    }
+  }, KEEP_ALIVE_INTERVAL);
+
+  return keepAliveInterval;
+}
+
 export async function startInstance(instanceId, io) {
   if (active.has(instanceId)) return active.get(instanceId).sock;
 
@@ -118,7 +143,8 @@ export async function startInstance(instanceId, io) {
   }
 
   const sock = makeWASocket(socketOptions);
-  active.set(instanceId, { sock, io });
+  const keepAliveInterval = startKeepAlive(instanceId, sock);
+  active.set(instanceId, { sock, io, keepAliveInterval });
 
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -152,6 +178,8 @@ export async function startInstance(instanceId, io) {
       const loggedOut = statusCode === DisconnectReason.loggedOut;
       const reason = lastDisconnect?.error?.message || 'unknown';
 
+      const entry = active.get(instanceId);
+      if (entry?.keepAliveInterval) clearInterval(entry.keepAliveInterval);
       active.delete(instanceId);
 
       if (loggedOut) {
@@ -181,11 +209,17 @@ export async function startInstance(instanceId, io) {
 
     for (const msg of messages) {
       try {
-        if (!msg.message || msg.key.fromMe) continue;
+        if (!msg.message) continue;
 
         const remoteJid = msg.key.remoteJid || '';
         const isGroup = remoteJid.endsWith('@g.us');
+        const fromMe = !!msg.key.fromMe;
+
+        // Skip group messages unless this instance has opted in
         if (isGroup && !instanceNow.includeGroupMessages) continue;
+
+        // Skip our own outgoing messages unless this instance has opted in
+        if (fromMe && !instanceNow.includeOwnMessages) continue;
 
         const senderJid = isGroup ? msg.key.participant || remoteJid : remoteJid;
         const { number, isLid } = await resolveSender(msg, isGroup, sock);
@@ -197,9 +231,11 @@ export async function startInstance(instanceId, io) {
         const text = extractMessageText(msg.message);
         if (text === null) continue;
 
+        const direction = fromMe ? 'out' : 'in';
+
         const doc = await Message.create({
           instance: instanceId,
-          direction: 'in',
+          direction,
           number,
           isLid,
           message: text,
@@ -212,6 +248,7 @@ export async function startInstance(instanceId, io) {
 
         io.to(room(instanceId)).emit('message', {
           instanceId,
+          direction,
           number,
           isLid,
           message: text,
@@ -223,6 +260,7 @@ export async function startInstance(instanceId, io) {
         const delivered = await postToWebhook(instanceNow, {
           instanceId,
           instanceName: instanceNow.name,
+          direction,
           number,
           isLid,
           message: text,
@@ -246,6 +284,9 @@ export async function startInstance(instanceId, io) {
 export async function stopInstance(instanceId, { wipeSession = false } = {}) {
   const entry = active.get(instanceId);
   if (entry) {
+    if (entry.keepAliveInterval) {
+      clearInterval(entry.keepAliveInterval);
+    }
     try {
       await entry.sock.logout();
     } catch (_) {

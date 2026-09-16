@@ -100,12 +100,13 @@ export async function deleteInstance(req, res) {
 }
 
 export async function updateWebhook(req, res) {
-  const { webhookUrl, includeGroupMessages, regenerateSecret } = req.body;
+  const { webhookUrl, includeGroupMessages, includeOwnMessages, regenerateSecret } = req.body;
   const instance = await findOwnedInstance(req);
   if (!instance) return res.status(404).json({ error: 'Instance not found' });
 
   if (webhookUrl !== undefined) instance.webhookUrl = webhookUrl || null;
   if (includeGroupMessages !== undefined) instance.includeGroupMessages = !!includeGroupMessages;
+  if (includeOwnMessages !== undefined) instance.includeOwnMessages = !!includeOwnMessages;
   if (regenerateSecret) instance.webhookSecret = crypto.randomBytes(16).toString('hex');
 
   await instance.save();

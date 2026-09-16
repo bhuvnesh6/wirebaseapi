@@ -51,6 +51,7 @@ function renderProxy() {
 function renderWebhookForm() {
   document.getElementById('webhook-url').value = instance.webhookUrl || '';
   document.getElementById('include-groups').checked = !!instance.includeGroupMessages;
+  document.getElementById('include-own').checked = !!instance.includeOwnMessages;
   document.getElementById('webhook-secret').textContent = instance.webhookSecret || '';
 }
 
@@ -61,14 +62,15 @@ function renderMessages() {
     return;
   }
   tbody.innerHTML = messages
-    .map(
-      (m) => `
+    .map((m) => {
+      const isOut = m.direction === 'out';
+      return `
       <tr>
-        <td class="mono" style="font-size:12px;">+${escapeHtml(m.number)}</td>
+        <td class="mono" style="font-size:12px;">${isOut ? '→' : '←'} +${escapeHtml(m.number)}</td>
         <td>${escapeHtml(m.message)}</td>
         <td class="hint-text" style="font-size:12px;">${new Date(m.waTimestamp || m.timestamp).toLocaleString()}</td>
-      </tr>`
-    )
+      </tr>`;
+    })
     .join('');
 }
 
@@ -133,6 +135,7 @@ document.getElementById('webhook-form').addEventListener('submit', async (e) => 
     const data = await api.patch(`/instances/${instanceId}/webhook`, {
       webhookUrl: document.getElementById('webhook-url').value,
       includeGroupMessages: document.getElementById('include-groups').checked,
+      includeOwnMessages: document.getElementById('include-own').checked,
     });
     instance = data.instance;
     savedMsg.style.display = 'inline';
