@@ -5,6 +5,9 @@ const instanceSchema = new mongoose.Schema(
     // Owner is either the Admin (ownerRole: 'admin', ownerId: null) or a sub-admin User.
     ownerRole: { type: String, enum: ['admin', 'subadmin'], required: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    app: { type: mongoose.Schema.Types.ObjectId, ref: 'DeveloperApp', default: null },
+    tenant: { type: mongoose.Schema.Types.ObjectId, ref: 'Tenant', default: null },
+    externalUserId: { type: String, default: null },
 
     name: { type: String, required: true, trim: true },
 

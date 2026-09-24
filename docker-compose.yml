@@ -1,5 +1,6 @@
 services:
   mongo:
+    container_name: wirebaseapi-mongo
     image: mongo:7
     restart: unless-stopped
     volumes:
@@ -9,7 +10,8 @@ services:
     # ports:
     #   - "127.0.0.1:27017:27017"
 
-  app:
+  wirebaseapi:
+    container_name: wirebaseapi-app
     build: .
     restart: unless-stopped
     depends_on:

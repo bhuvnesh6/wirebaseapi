@@ -16,6 +16,7 @@ import instanceRoutes from './src/routes/instanceRoutes.js';
 import subadminRoutes from './src/routes/subadminRoutes.js';
 import apiKeyRoutes from './src/routes/apiKeyRoutes.js';
 import publicRoutes from './src/routes/publicRoutes.js';
+import developerRoutes from './src/routes/developerRoutes.js';
 import { startAutoRefresh } from './src/services/proxyService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -50,6 +51,7 @@ app.use('/api/instances', instanceRoutes);
 app.use('/api/subadmins', subadminRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/public', publicRoutes); // authenticated by API key, not session - used by external integrations
+app.use('/api/v1/developer', developerRoutes);
 
 // --- Frontend: HTML pages in /public, JS+CSS assets in /static ---
 app.use('/static', express.static(path.join(__dirname, 'static')));

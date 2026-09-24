@@ -15,6 +15,10 @@ const messageSchema = new mongoose.Schema(
 
     webhookDelivered: { type: Boolean, default: false },
     webhookAttempts: { type: Number, default: 0 },
+    webhookLastAttemptAt: { type: Date, default: null },
+    webhookLastStatus: { type: String, default: null },
+    webhookError: { type: String, default: null },
+    webhookEventId: { type: String, default: null },
 
     waTimestamp: { type: Date, default: Date.now },
   },

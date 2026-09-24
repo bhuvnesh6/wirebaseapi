@@ -79,7 +79,305 @@ npm run dev     # nodemon, or: npm start
 
 Open `http://localhost:4000`.
 
-## 4. Docker deployment on an Ubuntu VPS
+## 4. Developer API: multi-tenant usage
+
+Wirebase supports a second layer on top of the admin/sub-admin dashboard: a developer app model.
+This is meant for external product teams that want to manage their own customers and WhatsApp
+instances without sharing the admin API key or a single global account key.
+
+### 4.1 Developer model
+
+A developer has:
+- `name`
+- `email`
+- `password`
+- `status`
+
+A developer app has:
+- `developer`
+- `name`
+- `clientId`
+- `clientSecretHash`
+- `webhookUrl`
+- `status`
+
+A tenant has:
+- `app`
+- `externalUserId` (your customer ID from your own app)
+- `name`
+- `status`
+
+Each WhatsApp instance can be linked to:
+- `app`
+- `tenant`
+- `externalUserId`
+
+This allows you to scope tasks to a specific application and customer instead of a global
+admin-owned API key.
+
+### 4.2 Developer authentication
+
+Use a developer app secret as a bearer token (recommended):
+
+```bash
+curl -H "Authorization: Bearer <APP_SECRET>" \
+  https://your-domain.com/api/v1/developer/tenants
+```
+
+You can also send:
+
+```bash
+curl -H "X-Firebase-App-Key: <APP_SECRET>" \
+  https://your-domain.com/api/v1/developer/tenants
+```
+
+> Do not ship the app secret in browser JavaScript. Keep it on your backend server only.
+
+### 4.3 Developer app lifecycle
+
+#### 1) Register a developer account
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Dev",
+    "email": "dev@acme.com",
+    "password": "super-secret-password"
+  }'
+```
+
+#### 2) Login as a developer
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "dev@acme.com",
+    "password": "super-secret-password"
+  }'
+```
+
+#### 3) Create an app
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/apps \
+  -H "Content-Type: application/json" \
+  -H "Cookie: wfirebase.sid=<session-cookie>" \
+  -d '{
+    "name": "Acme Production App",
+    "webhookUrl": "https://api.acme.com/webhooks/wfirebase"
+  }'
+```
+
+The response includes a one-time `clientSecret` that should be stored securely on your backend:
+
+```json
+{
+  "app": {
+    "id": "...",
+    "name": "Acme Production App",
+    "clientId": "app_xxx",
+    "webhookUrl": "https://api.acme.com/webhooks/wfirebase",
+    "status": "active"
+  },
+  "clientSecret": "firebase_app_xxxxxxxxxx",
+  "note": "Store this secret securely. It is shown once only."
+}
+```
+
+### 4.4 Tenant / user flow
+
+Each tenant represents one customer or user in your own platform.
+
+#### Create or update a tenant
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/tenants \
+  -H "Authorization: Bearer <APP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalUserId": "customer_123",
+    "name": "John Doe",
+    "webhookUrl": "https://api.acme.com/webhooks/wfirebase/customer_123"
+  }'
+```
+
+#### Create a WhatsApp instance for that tenant
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/tenants/customer_123/instances \
+  -H "Authorization: Bearer <APP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "john-whatsapp",
+    "webhookUrl": "https://api.acme.com/webhooks/wfirebase/customer_123"
+  }'
+```
+
+Response:
+
+```json
+{
+  "instance": {
+    "id": "6650...",
+    "name": "john-whatsapp",
+    "status": "created",
+    "externalUserId": "customer_123"
+  }
+}
+```
+
+#### Connect an instance
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/instances/6650.../connect \
+  -H "Authorization: Bearer <APP_SECRET>"
+```
+
+#### Check status
+```bash
+curl https://your-domain.com/api/v1/developer/instances/6650.../status \
+  -H "Authorization: Bearer <APP_SECRET>"
+```
+
+Example response:
+
+```json
+{
+  "instanceId": "6650...",
+  "externalUserId": "customer_123",
+  "tenantId": "...",
+  "status": "connected",
+  "phoneNumber": "919876543210",
+  "lastConnectedAt": "2026-09-24T12:00:00.000Z",
+  "connected": true
+}
+```
+
+#### Get QR code
+```bash
+curl https://your-domain.com/api/v1/developer/instances/6650.../qr \
+  -H "Authorization: Bearer <APP_SECRET>"
+```
+
+### 4.5 Send messages for a tenant instance
+
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/instances/6650.../messages \
+  -H "Authorization: Bearer <APP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "919876543210",
+    "type": "text",
+    "message": "Hello from my application"
+  }'
+```
+
+Media messages are supported too:
+
+```bash
+curl -X POST https://your-domain.com/api/v1/developer/instances/6650.../messages \
+  -H "Authorization: Bearer <APP_SECRET>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "919876543210",
+    "type": "image",
+    "url": "https://example.com/image.jpg",
+    "caption": "Hello"
+  }'
+```
+
+#### Get message history
+```bash
+curl "https://your-domain.com/api/v1/developer/instances/6650.../messages?limit=50" \
+  -H "Authorization: Bearer <APP_SECRET>"
+```
+
+### 4.6 Webhook payload
+
+For developer tenants, webhook events are scoped to the app and customer and include the tenant
+metadata when available.
+
+```json
+{
+  "event": "message.received",
+  "instanceId": "6650...",
+  "externalUserId": "customer_123",
+  "message": {
+    "id": "wamid...",
+    "from": "919876543210",
+    "text": "Hello",
+    "timestamp": "2026-09-24T12:00:00.000Z"
+  }
+}
+```
+
+Headers sent by Wirebase:
+
+```http
+X-Wirebase-Event: message.received
+X-Wirebase-Timestamp: 1727179200
+X-Wirebase-Signature: sha256=...
+```
+
+The signature is HMAC-based and should be checked on your backend before trusting the payload.
+
+### 4.7 Node.js example
+
+```js
+const axios = require('axios');
+
+const APP_SECRET = process.env.WIFIREBASE_APP_SECRET;
+const BASE = 'https://your-domain.com/api/v1/developer';
+
+async function createTenant() {
+  const res = await axios.post(`${BASE}/tenants`, {
+    externalUserId: 'customer_123',
+    name: 'John Doe',
+    webhookUrl: 'https://api.acme.com/webhooks/wfirebase/customer_123'
+  }, {
+    headers: { Authorization: `Bearer ${APP_SECRET}` }
+  });
+
+  return res.data;
+}
+
+async function createInstanceForTenant(externalUserId) {
+  const res = await axios.post(`${BASE}/tenants/${externalUserId}/instances`, {
+    name: 'john-whatsapp'
+  }, {
+    headers: { Authorization: `Bearer ${APP_SECRET}` }
+  });
+
+  return res.data;
+}
+
+async function sendMessage(instanceId) {
+  const res = await axios.post(`${BASE}/instances/${instanceId}/messages`, {
+    to: '919876543210',
+    type: 'text',
+    message: 'Hello from my app'
+  }, {
+    headers: { Authorization: `Bearer ${APP_SECRET}` }
+  });
+
+  return res.data;
+}
+```
+
+### 4.8 Python example
+
+```python
+import requests
+
+APP_SECRET = "<APP_SECRET>"
+BASE = "https://your-domain.com/api/v1/developer"
+
+resp = requests.post(
+    f"{BASE}/tenants",
+    json={"externalUserId": "customer_123", "name": "John Doe"},
+    headers={"Authorization": f"Bearer {APP_SECRET}"},
+    timeout=30,
+)
+print(resp.json())
+```
+
+## 5. Docker deployment on an Ubuntu VPS
 
 ### Prerequisites on the VPS
 ```bash
@@ -87,32 +385,32 @@ curl -fsSL https://get.docker.com | sh
 sudo apt install -y docker-compose-plugin
 ```
 
-### Deploy
+### Deploy with the project name `wirebaseapi`
+
+For a stable container name and easier management, use:
+
 ```bash
-git clone <your-repo-url> wirebase
-cd wirebase
+git clone <your-repo-url> wirebaseapi
+cd wirebaseapi
 cp .env.example .env
 nano .env   # set ADMIN_API_KEY, SESSION_SECRET, PUBLIC_BASE_URL to your real domain, etc.
 
-docker compose build
-docker compose up -d
+docker compose -p wirebaseapi up -d --build
 ```
 
-That's it — `docker-compose.yml` runs two containers:
-- **`mongo`** — MongoDB 7, data persisted in the `mongo-data` volume, not exposed to the host
-- **`app`** — this Node app, persisted Baileys sessions in the `sessions-data` volume, listening
-  on port `4000`
+This gives you container names like:
+- `wirebaseapi-app`
+- `wirebaseapi-mongo`
 
 Check logs / status:
 ```bash
-docker compose logs -f app
-docker compose ps
+docker compose -p wirebaseapi logs -f wirebaseapi
+docker ps
 ```
 
-Update after a `git pull`:
+Update after a git pull:
 ```bash
-docker compose build app
-docker compose up -d app
+docker compose -p wirebaseapi up -d --build
 ```
 
 ### Putting it behind a domain with HTTPS
@@ -137,9 +435,9 @@ server {
 }
 ```
 Then set `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://your-domain.com` in `.env` so
-session cookies are marked `Secure`, and restart: `docker compose up -d app`.
+session cookies are marked `Secure`, and restart: `docker compose -p wirebaseapi up -d --build`.
 
-## 5. MongoDB collections
+## 6. MongoDB collections
 
 | Collection  | Purpose                                                                          |
 |-------------|-----------------------------------------------------------------------------------|
@@ -148,8 +446,11 @@ session cookies are marked `Secure`, and restart: `docker compose up -d app`.
 | `messages`  | Every inbound/outbound message + webhook delivery status                        |
 | `apikeys`   | Hashed API keys per owner (the full key is never stored, only its sha256)        |
 | `sessions`  | Login sessions (`connect-mongo`) — this is what replaces JWT                      |
+| `developers` | Developer accounts and login data                                                  |
+| `developerapps` | Developer app credentials and webhook configuration                              |
+| `tenants`   | Tenant records scoped to a specific developer app                                 |
 
-## 6. Free proxies & scaling notes
+## 7. Free proxies & scaling notes
 
 `src/services/proxyService.js` pulls candidate proxies from public lists, tests them, and keeps
 a pool of the fastest ones; an instance with "use proxy" enabled gets one as its HTTP(S) agent.
