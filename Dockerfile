@@ -23,7 +23,7 @@ RUN mkdir -p /app/sessions
 VOLUME ["/app/sessions"]
 
 ENV NODE_ENV=production
-EXPOSE 4000
+EXPOSE 4030
 
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "index.js"]

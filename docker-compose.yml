@@ -22,7 +22,7 @@ services:
       # Overrides whatever MONGO_URI is in .env, so the app always reaches the mongo service
       - MONGO_URI=mongodb://mongo:27017/wirebase
     ports:
-      - "4000:4000"
+      - "4030:4030"
     volumes:
       - sessions-data:/app/sessions
 
