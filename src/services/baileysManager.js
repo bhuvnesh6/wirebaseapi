@@ -151,7 +151,7 @@ export async function startInstance(instanceId, io) {
 
     if (qr) {
       const qrDataUrl = await QRCode.toDataURL(qr);
-      await updateStatus(instanceId, io, 'qr_pending');
+      await Instance.findByIdAndUpdate(instanceId, { status: 'qr_pending', qrCode: qrDataUrl });
       io.to(room(instanceId)).emit('qr', { instanceId, qr: qrDataUrl });
     }
 
@@ -164,6 +164,7 @@ export async function startInstance(instanceId, io) {
       const mePushName = sock.user?.name || null;
       await Instance.findByIdAndUpdate(instanceId, {
         status: 'connected',
+        qrCode: null,
         phoneNumber: meNumber,
         pushName: mePushName,
         lastConnectedAt: new Date(),
