@@ -13,9 +13,11 @@ const instanceSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['created', 'qr_pending', 'connecting', 'connected', 'disconnected', 'logged_out'],
+      enum: ['created', 'qr_pending', 'qr_expired', 'connecting', 'connected', 'disconnected', 'logged_out'],
       default: 'created',
     },
+
+    qrCode: { type: String, default: null },
 
     phoneNumber: { type: String, default: null },
     pushName: { type: String, default: null },

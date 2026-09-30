@@ -188,8 +188,13 @@ export async function startInstance(instanceId, io) {
         io.to(room(instanceId)).emit('status', { instanceId, status: 'logged_out', reason });
         fs.rmSync(sessionPath, { recursive: true, force: true });
         console.log(chalk.red(`⛔ Instance ${instanceId} logged out: ${reason}`));
+      } else if (reason.includes('QR refs attempts ended')) {
+        // Nobody scanned in time: stop looping. The next /connect call starts a fresh QR round.
+        await Instance.findByIdAndUpdate(instanceId, { status: 'qr_expired', qrCode: null, lastDisconnectReason: reason });
+        io.to(room(instanceId)).emit('status', { instanceId, status: 'qr_expired', reason });
+        console.log(chalk.yellow(`⌛ Instance ${instanceId}: QR expired unscanned, waiting for a new connect request`));
       } else {
-        await Instance.findByIdAndUpdate(instanceId, { status: 'disconnected', lastDisconnectReason: reason });
+        await Instance.findByIdAndUpdate(instanceId, { status: 'disconnected', qrCode: null, lastDisconnectReason: reason });
         io.to(room(instanceId)).emit('status', { instanceId, status: 'disconnected', reason });
         console.log(chalk.yellow(`⚠️  Instance ${instanceId} disconnected: ${reason} - reconnecting in 3s`));
         await wait(3000);
@@ -259,17 +264,21 @@ export async function startInstance(instanceId, io) {
         });
 
         const delivered = await postToWebhook(instanceNow, {
+          event: fromMe ? 'message.sent' : 'message.received',
           instanceId,
           instanceName: instanceNow.name,
+          externalUserId: instanceNow.externalUserId || null,
+          message: {
+            id: msg.key.id,
+            from: isLid ? `${number}@lid` : number,
+            text,
+            timestamp: doc.waTimestamp,
+          },
           direction,
-          number,
           isLid,
-          message: text,
           isGroup,
           groupId: isGroup ? remoteJid.split('@')[0] : null,
           pushName: msg.pushName || null,
-          timestamp: doc.waTimestamp,
-          messageId: msg.key.id,
         });
 
         await Message.findByIdAndUpdate(doc._id, { webhookDelivered: delivered, $inc: { webhookAttempts: 1 } });
