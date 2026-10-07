@@ -41,7 +41,7 @@ Meta's official Cloud API instead.
   lets the public send endpoint accept a human-readable `instanceName` instead of a raw ID —
   you always know exactly which number a message will go out from:
 
-  ```
+```
   POST /api/public/send
   Headers: X-API-Key: <your key>
   {
@@ -50,7 +50,7 @@ Meta's official Cloud API instead.
     "type": "text",
     "message": "Hello!"
   }
-  ```
+```
   `instanceId` is also still accepted if you prefer it. Media types (`image`, `video`, `audio`,
   `document`) take a public `url` instead of `message`. Full field reference and live, copyable
   code for cURL / JavaScript / Python / PHP / n8n is in the app's **Developers** page.
@@ -70,6 +70,14 @@ MONGO_URI=mongodb://127.0.0.1:27017/wirebase
 ADMIN_API_KEY=some-long-random-string     # this IS the admin login credential
 SESSION_SECRET=some-other-long-random-string
 PUBLIC_BASE_URL=http://localhost:4000
+PORT=4000                                 # the server defaults to 4030 if this is not set
+```
+
+Optional:
+```
+DEVELOPER_SIGNUP_ENABLED=false            # close public developer registration (default: open)
+TRUST_PROXY=true                          # set when running behind Nginx/Caddy (also implied by COOKIE_SECURE=true)
+COOKIE_SECURE=true                        # production over HTTPS only
 ```
 
 Run it (needs a local MongoDB, or point `MONGO_URI` at Atlas):
@@ -135,6 +143,9 @@ curl -H "X-Firebase-App-Key: <APP_SECRET>" \
 
 ### 4.3 Developer app lifecycle
 
+> Sign-up is open by default. To close it on a production server, set `DEVELOPER_SIGNUP_ENABLED=false`
+> in `.env` (registration then returns `403`). Passwords must be at least 8 characters.
+
 #### 1) Register a developer account
 ```bash
 curl -X POST https://your-domain.com/api/v1/developer/register \
@@ -160,7 +171,7 @@ curl -X POST https://your-domain.com/api/v1/developer/login \
 ```bash
 curl -X POST https://your-domain.com/api/v1/developer/apps \
   -H "Content-Type: application/json" \
-  -H "Cookie: wfirebase.sid=<session-cookie>" \
+  -H "Cookie: wirebase.sid=<session-cookie>" \
   -d '{
     "name": "Acme Production App",
     "webhookUrl": "https://api.acme.com/webhooks/wfirebase"
@@ -181,6 +192,18 @@ The response includes a one-time `clientSecret` that should be stored securely o
   "clientSecret": "firebase_app_xxxxxxxxxx",
   "note": "Store this secret securely. It is shown once only."
 }
+```
+
+#### 4) Rotate or revoke an app secret
+
+```bash
+# issue a new secret (the old one stops working immediately; shown once)
+curl -X POST https://your-domain.com/api/v1/developer/apps/<APP_ID>/rotate-secret \
+  -H "Cookie: wirebase.sid=<session-cookie>"
+
+# revoke the app
+curl -X POST https://your-domain.com/api/v1/developer/apps/<APP_ID>/revoke \
+  -H "Cookie: wirebase.sid=<session-cookie>"
 ```
 
 ### 4.4 Tenant / user flow
@@ -218,8 +241,10 @@ Response:
     "id": "6650...",
     "name": "john-whatsapp",
     "status": "created",
-    "externalUserId": "customer_123"
-  }
+    "externalUserId": "customer_123",
+    "webhookSecret": "9f2c..."
+  },
+  "note": "Use webhookSecret to verify X-Wirebase-Signature on incoming webhooks."
 }
 ```
 
@@ -255,6 +280,46 @@ curl https://your-domain.com/api/v1/developer/instances/6650.../qr \
   -H "Authorization: Bearer <APP_SECRET>"
 ```
 
+#### Manage tenants and instances
+
+All of these use `Authorization: Bearer <APP_SECRET>`.
+
+| Method | Route | Purpose |
+|--------|-------|---------|
+| `GET` | `/tenants/:externalUserId` | Get one tenant |
+| `DELETE` | `/tenants/:externalUserId` | Delete the tenant, log out and delete all its instances and their messages |
+| `POST` | `/tenants/:ref/webhook` | Set the tenant webhook (`:ref` = tenant id **or** `externalUserId`) |
+| `GET` | `/tenants/:externalUserId/instances` | List a tenant's instances |
+| `GET` | `/instances?externalUserId=...` | List all app instances (optional filter) |
+| `GET` | `/instances/:id` | Instance details, effective webhook URL and `webhookSecret` |
+| `PATCH` | `/instances/:id/webhook` | Override the instance webhook (`{"webhookUrl": null}` = inherit again) |
+| `POST` | `/instances/:id/logout` | Log the WhatsApp device out and wipe the session (call `/connect` to pair again) |
+| `DELETE` | `/instances/:id` | Log out and permanently delete the instance and its messages |
+
+```bash
+# who is connected for customer_123?
+curl https://your-domain.com/api/v1/developer/tenants/customer_123/instances \
+  -H "Authorization: Bearer <APP_SECRET>"
+
+# get the webhook signing secret for an instance
+curl https://your-domain.com/api/v1/developer/instances/6650... \
+  -H "Authorization: Bearer <APP_SECRET>"
+
+# log out a customer's number
+curl -X POST https://your-domain.com/api/v1/developer/instances/6650.../logout \
+  -H "Authorization: Bearer <APP_SECRET>"
+```
+
+**Webhook URL resolution.** For each event Wirebase picks the first URL that is set:
+instance override → tenant `webhookUrl` → app `webhookUrl`. It is resolved when the event fires, so
+updating a tenant or app webhook affects existing instances immediately.
+
+**Upserting tenants.** `POST /tenants` only changes the fields you send. Omitting `name` or `webhookUrl`
+on an existing tenant leaves the stored value untouched.
+
+Creating an instance returns `webhookSecret` — use it to verify webhook signatures (see 4.6).
+`409` is returned if the instance name is already taken.
+
 ### 4.5 Send messages for a tenant instance
 
 ```bash
@@ -282,7 +347,19 @@ curl -X POST https://your-domain.com/api/v1/developer/instances/6650.../messages
   }'
 ```
 
+**Sending rules**
+
+- `to` — phone number with country code (`919876543210`, `+91 98765-43210` and numeric values are all accepted)
+  or a full JID such as `120363...@g.us` for groups.
+- `url` (image / video / audio / document) must be a public **http(s)** URL. Anything else (local paths,
+  `file://`, etc.) is rejected with `400`.
+- `409` — the instance is not connected (call `/connect` and wait for `status: "connected"`).
+- `400` — validation error. `502` — WhatsApp rejected or failed the send.
+
 #### Get message history
+
+Optional query params: `limit` (max 200), `number`, `direction` (`in` | `out`), `before` (ISO date, for paging).
+
 ```bash
 curl "https://your-domain.com/api/v1/developer/instances/6650.../messages?limit=50" \
   -H "Authorization: Bearer <APP_SECRET>"
@@ -291,19 +368,43 @@ curl "https://your-domain.com/api/v1/developer/instances/6650.../messages?limit=
 ### 4.6 Webhook payload
 
 For developer tenants, webhook events are scoped to the app and customer and include the tenant
-metadata when available.
+metadata. Events: `message.received`, `message.sent` (only if the instance opted in to own messages)
+and `instance.status`.
 
 ```json
 {
   "event": "message.received",
   "instanceId": "6650...",
+  "instanceName": "john-whatsapp",
+  "appId": "...",
+  "tenantId": "...",
   "externalUserId": "customer_123",
   "message": {
     "id": "wamid...",
     "from": "919876543210",
     "text": "Hello",
     "timestamp": "2026-09-24T12:00:00.000Z"
-  }
+  },
+  "direction": "in",
+  "isLid": false,
+  "isGroup": false,
+  "groupId": null,
+  "pushName": "John"
+}
+```
+
+Status events (`connected`, `disconnected`, `logged_out`, `qr_expired`) are sent for developer instances:
+
+```json
+{
+  "event": "instance.status",
+  "instanceId": "6650...",
+  "appId": "...",
+  "tenantId": "...",
+  "externalUserId": "customer_123",
+  "status": "connected",
+  "phoneNumber": "919876543210",
+  "timestamp": "2026-09-24T12:00:00.000Z"
 }
 ```
 
@@ -312,17 +413,45 @@ Headers sent by Wirebase:
 ```http
 X-Wirebase-Event: message.received
 X-Wirebase-Timestamp: 1727179200
-X-Wirebase-Signature: sha256=...
+X-Wirebase-Signature: sha256=<hex>
 ```
 
-The signature is HMAC-based and should be checked on your backend before trusting the payload.
+`X-Wirebase-Signature` = `sha256=` + `HMAC_SHA256(webhookSecret, "<timestamp>.<raw request body>")`,
+where `webhookSecret` is the per-instance secret returned by `POST /tenants/:id/instances` and
+`GET /instances/:id`. Always verify it on your backend, using the **raw** body, before trusting a payload:
+
+```js
+import crypto from 'crypto';
+import express from 'express';
+
+app.post('/webhooks/wirebase', express.raw({ type: 'application/json' }), (req, res) => {
+  const ts = req.header('X-Wirebase-Timestamp') || '';
+  const sig = req.header('X-Wirebase-Signature') || '';
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', process.env.WIREBASE_WEBHOOK_SECRET)
+    .update(`${ts}.${req.body}`)           // req.body is the raw Buffer here
+    .digest('hex');
+
+  const fresh = Math.abs(Date.now() / 1000 - Number(ts)) < 300; // reject replays older than 5 min
+  const valid = sig.length === expected.length &&
+    crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  if (!valid || !fresh) return res.sendStatus(401);
+
+  const event = JSON.parse(req.body);
+  // ... handle event ...
+  res.sendStatus(200);
+});
+```
+
+Respond with any `2xx` within 10 seconds. Failed deliveries are retried 3 times in total with
+exponential backoff (1s, 2s); the final result is stored on the message (`webhookDelivered`, `webhookAttempts`).
 
 ### 4.7 Node.js example
 
 ```js
 const axios = require('axios');
 
-const APP_SECRET = process.env.WIFIREBASE_APP_SECRET;
+const APP_SECRET = process.env.WIREBASE_APP_SECRET;
 const BASE = 'https://your-domain.com/api/v1/developer';
 
 async function createTenant() {
@@ -431,11 +560,15 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;   # required for Secure session cookies
     }
 }
 ```
 Then set `COOKIE_SECURE=true` and `PUBLIC_BASE_URL=https://your-domain.com` in `.env` so
 session cookies are marked `Secure`, and restart: `docker compose -p wirebaseapi up -d --build`.
+(`COOKIE_SECURE=true` also makes Express trust the first proxy hop; the `X-Forwarded-Proto` header
+above is what lets it see the request as HTTPS. Without both, login cookies are silently never set.)
 
 ## 6. MongoDB collections
 
@@ -461,3 +594,7 @@ Baileys sockets live in-memory in a single Node process (`src/services/baileysMa
 Running multiple app replicas would need a shared registry (e.g. Redis) so each WhatsApp
 instance is only ever "owned" by one process — the current single-container setup is the right
 starting point for one VPS.
+
+On boot, the server automatically reconnects every previously-paired instance (status `connected` /
+`disconnected` with a saved session), one per second. On `SIGTERM`/`SIGINT` sockets are closed
+**without** logging out, so deploys and restarts don't unpair anyone's WhatsApp.
