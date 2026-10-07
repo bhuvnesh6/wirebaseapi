@@ -18,6 +18,7 @@ import apiKeyRoutes from './src/routes/apiKeyRoutes.js';
 import publicRoutes from './src/routes/publicRoutes.js';
 import developerRoutes from './src/routes/developerRoutes.js';
 import { startAutoRefresh } from './src/services/proxyService.js';
+import { restoreInstances, shutdownAll } from './src/services/baileysManager.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +26,11 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = (process.env.CLIENT_ORIGIN || process.env.PUBLIC_BASE_URL || 'http://localhost:4000').split(',');
+
+// Behind Nginx/Caddy, Express must trust the proxy or `Secure` session cookies are never set.
+if (process.env.COOKIE_SECURE === 'true' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json({ limit: '2mb' }));
@@ -57,6 +63,15 @@ app.use('/api/v1/developer', developerRoutes);
 app.use('/static', express.static(path.join(__dirname, 'static')));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// JSON 404 for unknown API routes + global error handler (catches errors forwarded from async handlers)
+app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
+app.use((err, req, res, next) => {
+  console.error(chalk.red(`[error] ${req.method} ${req.originalUrl}:`), err);
+  if (res.headersSent) return next(err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({ error: status < 500 ? err.message : 'Internal server error' });
+});
+
 // --- Socket.IO, sharing the same session as Express (so /instance pages get live QR/status/messages) ---
 const io = new Server(server, { cors: { origin: allowedOrigins, credentials: true } });
 app.set('io', io);
@@ -83,12 +98,29 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 4030;
 
+// A stray rejected promise should be logged, not kill every connected WhatsApp session.
+process.on('unhandledRejection', (reason) => console.error(chalk.red('[unhandledRejection]'), reason));
+
 connectDB()
   .then(() => {
     startAutoRefresh();
-    server.listen(PORT, () => console.log(chalk.green(`🚀 Wirebase listening on :${PORT}`)));
+    server.listen(PORT, () => {
+      console.log(chalk.green(`🚀 Wirebase listening on :${PORT}`));
+      // reconnect every previously-paired instance (sessions survive restarts/deploys)
+      restoreInstances(io).catch((err) => console.error(chalk.red('[restoreInstances] failed:'), err));
+    });
   })
   .catch((err) => {
     console.error(chalk.red('Failed to start server:'), err);
     process.exit(1);
   });
+
+function shutdown(signal) {
+  console.log(chalk.yellow(`${signal} received - shutting down`));
+  shutdownAll(); // close sockets without logging out
+  io.close();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
